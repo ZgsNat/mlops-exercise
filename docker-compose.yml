@@ -1,0 +1,167 @@
+name: mlops-exercise
+
+x-s3-env: &s3-env
+  AWS_ACCESS_KEY_ID: ${MINIO_ROOT_USER:-minioadmin}
+  AWS_SECRET_ACCESS_KEY: ${MINIO_ROOT_PASSWORD:-miniopassword}
+  AWS_DEFAULT_REGION: ${AWS_DEFAULT_REGION:-us-east-1}
+  MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+
+services:
+
+  # ==========================================
+  # 1. POSTGRESQL (Shared DB Server)
+  # ==========================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: mlops-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-mlops}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-mlopspass}
+      POSTGRES_DB: ${POSTGRES_DB:-mlops_db}
+    ports:
+      - "${POSTGRES_PORT:-15433}:5432"
+    volumes:
+      - ./pg-data:/var/lib/postgresql/data
+      - ./scripts/init_postgres.sql:/docker-entrypoint-initdb.d/init_postgres.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-mlops} -d ${POSTGRES_DB:-mlops_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+    restart: unless-stopped
+
+  # ==========================================
+  # 2. MINIO (S3 Object Storage for Artifacts)
+  # ==========================================
+  minio:
+    image: minio/minio:latest
+    container_name: mlops-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-miniopassword}
+    ports:
+      - "${MINIO_API_PORT:-19020}:9000"
+      - "${MINIO_CONSOLE_PORT:-19021}:9001"
+    volumes:
+      - ./minio-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+      start_period: 10s
+    restart: unless-stopped
+
+  # ==========================================
+  # 3. MINIO INIT (Bucket Creation Job)
+  # ==========================================
+  minio-init:
+    build: .
+    image: mlops-exercise:latest
+    container_name: mlops-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      <<: *s3-env
+      MINIO_BUCKET: ${MINIO_BUCKET:-mlflow}
+    command: ["python", "scripts/init_minio.py"]
+    restart: "no"
+
+  # ==========================================
+  # 4. MLFLOW (Tracking & Model Registry)
+  # ==========================================
+  mlflow:
+    build: .
+    image: mlops-exercise:latest
+    container_name: mlops-mlflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio-init:
+        condition: service_completed_successfully
+    environment:
+      <<: *s3-env
+    command:
+      - mlflow
+      - server
+      - --backend-store-uri
+      - postgresql+psycopg2://${POSTGRES_USER:-mlops}:${POSTGRES_PASSWORD:-mlopspass}@postgres:5432/${POSTGRES_DB:-mlops_db}
+      - --default-artifact-root
+      - s3://${MINIO_BUCKET:-mlflow}/
+      - --no-serve-artifacts
+      - --allowed-hosts
+      - "*"
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+    ports:
+      - "${MLFLOW_PORT:-15030}:5000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health').read()"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    restart: unless-stopped
+
+  # ==========================================
+  # 5. AIRFLOW (Pipeline Orchestration)
+  # ==========================================
+  airflow:
+    build: .
+    image: mlops-exercise:latest
+    container_name: mlops-airflow
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+    environment:
+      <<: *s3-env
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-mlops}:${POSTGRES_PASSWORD:-mlopspass}@postgres:5432/airflow_db
+      AIRFLOW__CORE__DAGS_FOLDER: /work/dags
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      AIRFLOW__CORE__DAGS_ARE_PAUSED_AT_CREATION: "false"
+      _AIRFLOW_WWW_USER_USERNAME: ${AIRFLOW_USER:-admin}
+      _AIRFLOW_WWW_USER_PASSWORD: ${AIRFLOW_PASSWORD:-admin}
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_NAME: ${MODEL_NAME:-wine-classifier}
+      MODEL_ALIAS: ${MODEL_ALIAS:-champion}
+      EXPERIMENT_NAME: ${EXPERIMENT_NAME:-wine-classification-pipeline}
+    ports:
+      - "${AIRFLOW_PORT:-18080}:8080"
+    volumes:
+      - ./dags:/work/dags
+      - ./src:/work/src
+      - ./airflow-data:/work/airflow
+    command: ["airflow", "standalone"]
+    restart: unless-stopped
+
+  # ==========================================
+  # 6. FASTAPI (Model Serving API)
+  # ==========================================
+  api:
+    build: .
+    image: mlops-exercise:latest
+    container_name: mlops-api
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    environment:
+      <<: *s3-env
+      MLFLOW_TRACKING_URI: http://mlflow:5000
+      MODEL_NAME: ${MODEL_NAME:-wine-classifier}
+      MODEL_VERSION: ${MODEL_VERSION:-1}
+      MODEL_ALIAS: ${MODEL_ALIAS:-champion}
+      USE_ALIAS: "false"
+    ports:
+      - "${API_PORT:-18013}:8000"
+    volumes:
+      - ./app:/work/app
+      - ./src:/work/src
+    command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    restart: unless-stopped

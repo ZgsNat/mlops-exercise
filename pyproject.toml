@@ -1,0 +1,39 @@
+[project]
+name = "exercise"
+version = "0.1.0"
+description = "Add your description here"
+authors = [
+    { name = "ZgsNat", email = "nguyenthaithinh9876@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "apache-airflow>=3.2.2",
+    "asyncpg>=0.31.0",
+    "boto3>=1.43.98",
+    "fastapi>=0.141.1",
+    "mlflow>=3.16.1",
+    "numpy>=2.4.6",
+    "pandas>=3.0.6",
+    "psycopg2-binary>=2.9.13",
+    "pydantic>=2.13.5",
+    "python-dotenv>=1.2.3",
+    "requests>=2.34.2",
+    "scikit-learn>=1.9.1",
+    "uvicorn[standard]>=0.53.0",
+]
+
+[project.scripts]
+exercise = "exercise:main"
+
+[build-system]
+requires = ["uv_build>=0.12.17,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "black>=26.5.1",
+    "flake8>=7.3.0",
+    "httpx>=0.28.1",
+    "pytest>=9.1.1",
+    "pytest-cov>=7.1.0",
+]
