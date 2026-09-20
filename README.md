@@ -32,31 +32,31 @@ This project implements a **robust, automated MLOps pipeline** using scikit-lear
 ```mermaid
 flowchart TD
     subgraph DataLayer ["1. Data Ingestion & Validation"]
-        RawData[Wine Dataset<br/>13 Chemical Features] --> Validator{Schema & Quality<br/>Validation}
+        RawData["Wine Dataset<br/>13 Chemical Features"] --> Validator{"Schema & Quality<br/>Validation"}
     end
 
     subgraph OrchestrationLayer ["2. Workflow Orchestration (Apache Airflow)"]
-        Validator -->|Valid Data| TrainTask[Task: Model Training<br/>RandomForest Classifier]
-        TrainTask --> GateTask{Task: Quality Gate<br/>Accuracy &ge; 0.90}
-        GateTask -->|Passed| RegTask[Task: MLflow Registry<br/>Assign @champion Alias]
+        Validator -->|"Valid Data"| TrainTask["Task: Model Training<br/>RandomForest Classifier"]
+        TrainTask --> GateTask{"Task: Quality Gate<br/>Accuracy >= 0.90"}
+        GateTask -->|"Passed"| RegTask["Task: MLflow Registry<br/>Assign @champion Alias"]
     end
 
     subgraph TrackingLayer ["3. Centralized Registry & Storage"]
-        RegTask --> Postgres[(PostgreSQL:15433<br/>Runs, Metrics & Metadata)]
-        RegTask --> MinIO[(MinIO S3:19020<br/>Model Artifacts)]
-        Postgres <--> MLflowUI[MLflow Registry UI:15030]
+        RegTask --> Postgres[("PostgreSQL: 15433<br/>Runs, Metrics & Metadata")]
+        RegTask --> MinIO[("MinIO S3: 19020<br/>Model Artifacts")]
+        Postgres <--> MLflowUI["MLflow Registry UI: 15030"]
         MinIO <--> MLflowUI
     end
 
     subgraph ServingLayer ["4. Production Serving (FastAPI)"]
-        MLflowUI -->|models:/wine-classifier/@champion| APIService[FastAPI Server:18013]
-        Client([Client / Frontend / curl]) -->|POST /predict| APIService
-        APIService -->|Prediction & Probabilities| Client
+        MLflowUI -->|"Load Champion Model"| APIService["FastAPI Server: 18013"]
+        Client(["Client / Frontend / curl"]) -->|"POST /predict"| APIService
+        APIService -->|"Prediction & Probabilities"| Client
     end
 
     subgraph CILayer ["5. Continuous Integration"]
-        GitHubActions[GitHub Actions] -->|Pytest & Lint| TrainTask
-        GitHubActions -->|Container Build Test| APIService
+        GitHubActions["GitHub Actions"] -->|"Pytest & Lint"| TrainTask
+        GitHubActions -->|"Container Build Test"| APIService
     end
 ```
 
