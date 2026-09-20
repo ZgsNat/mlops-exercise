@@ -1,6 +1,6 @@
 # 🍷 Automated MLOps Pipeline: From Ingestion to Serving
 
-[![CI Pipeline](https://github.com/your-username/mlops-exercise/actions/workflows/ci.yml/badge.svg)](https://github.com/your-username/mlops-exercise/actions/workflows/ci.yml)
+[![CI Pipeline](https://github.com/ZgsNat/mlops-exercise/actions/workflows/ci.yml/badge.svg)](https://github.com/ZgsNat/mlops-exercise/actions/workflows/ci.yml)
 [![uv](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/uv/main/assets/badge/v0.json)](https://github.com/astral-sh/uv)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
 [![Apache Airflow](https://img.shields.io/badge/Airflow-3.2-017CEE?logo=apache-airflow&logoColor=white)](https://airflow.apache.org/)
@@ -87,7 +87,7 @@ All services run cleanly isolated in Docker with non-conflicting dedicated ports
 ### 2. Clone & Setup Environment
 ```bash
 # Clone the repository
-git clone https://github.com/your-username/mlops-exercise.git
+git clone https://github.com/ZgsNat/mlops-exercise.git
 cd mlops-exercise
 
 # Copy environment settings template (defaults work out-of-the-box)
